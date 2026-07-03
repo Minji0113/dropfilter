@@ -1928,107 +1928,97 @@ function buildActionComment(act) {
 function buildScriptPreview(p) {
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  if (!p) return '<span class="sp-cmt">// 프리셋을 선택하세요</span>';
-  if (p.isSystem) return '<span class="sp-cmt">// 시스템 [기본값] 프리셋은 Export가 지원되지 않습니다.\n// 커스텀 프리셋을 선택하세요.</span>';
-
-  // JSON tokenizer (character-level) for syntax highlighting
-  function hlLine(raw) {
-    if (!raw.trim()) return '';
-    if (/^\s*\/\//.test(raw)) return '<span class="sp-cmt">' + esc(raw) + '</span>';
-    let out = '', i = 0;
-    while (i < raw.length) {
-      const ch = raw[i];
-      if (ch === '"') {
-        let j = i + 1;
-        while (j < raw.length && raw[j] !== '"') { if (raw[j] === '\\') j++; j++; }
-        const tok = raw.slice(i, j + 1);
-        const isKey = raw.slice(j + 1).trimStart().startsWith(':');
-        out += '<span class="' + (isKey ? 'sp-key' : 'sp-str') + '">' + esc(tok) + '</span>';
-        i = j + 1;
-      } else if ((ch === '-' || (ch >= '0' && ch <= '9')) && (i === 0 || /[:\[,\s]/.test(raw[i-1]))) {
-        let j = i; if (raw[j] === '-') j++;
-        while (j < raw.length && /[\d.eE+\-]/.test(raw[j])) j++;
-        out += '<span class="sp-num">' + esc(raw.slice(i, j)) + '</span>'; i = j;
-      } else if (raw.slice(i,i+4) === 'true')  { out += '<span class="sp-bool">true</span>';  i += 4; }
-        else if (raw.slice(i,i+5) === 'false') { out += '<span class="sp-bool">false</span>'; i += 5; }
-        else if (raw.slice(i,i+4) === 'null')  { out += '<span class="sp-bool">null</span>';  i += 4; }
-        else { out += esc(ch); i++; }
-    }
-    return out;
-  }
-
-  const fallbackLabel = p.defaultBehavior === 'HideAll' ? '모든 연출 미표시' : '시스템 기본값 적용';
-  const itemRules = (p.itemRules||[]).slice().sort((a,b)=>a.priority-b.priority);
-  const condRules = (p.condRules||[]).slice().sort((a,b)=>a.priority-b.priority);
+  if (!p) return '<span class="sp-cmt"># 프리셋을 선택하세요</span>';
+  if (p.isSystem) return '<span class="sp-cmt"># 시스템 프리셋은 미리보기를 지원하지 않습니다.\n# 커스텀 프리셋을 선택하세요.</span>';
 
   const out = [];
-  const cmt  = t => out.push('<span class="sp-cmt">' + esc(t) + '</span>');
-  const jl   = t => out.push(hlLine(t));
+  const cmt   = t => out.push('<span class="sp-cmt">' + esc(t) + '</span>');
+  const kv    = (ind, k, v) => out.push(
+    esc(ind) + '<span class="sp-key">' + esc(k.padEnd(26)) + '</span><span class="sp-str">' + esc(String(v)) + '</span>'
+  );
   const blank = () => out.push('');
+  const ck    = n => n ? 'Color_' + String(n).padStart(2,'0') : null;
 
-  // ── 헤더 주석 ──
-  cmt('// ══════════════════════════════════════════════════════════════════');
-  cmt('// NUT 드랍 필터  ·  스크립트 미리보기');
-  cmt('// 프리셋: "' + p.name + '"');
-  cmt('// 지정되지 않은 아이템: ' + fallbackLabel);
-  cmt('// ══════════════════════════════════════════════════════════════════');
-  blank();
-  jl('{');
-  jl('  "version": "1.0",');
-  jl('  "preset_name": "' + p.name + '",');
-  jl('  "default_behavior": "' + (p.defaultBehavior||'Default') + '",');
-  blank();
+  const wa = (act, ind) => {
+    const a = act || {};
+    const lbl = a.labelEnabled !== false;
+    kv(ind, 'Label', lbl ? 'On' : 'Off');
+    const fc = ck(a.labelFontColor), bc = ck(a.labelBgColor);
+    if (lbl && fc) kv(ind, 'LabelColor', fc);
+    if (lbl && bc) kv(ind, 'LabelBg', bc);
+    if (a.fxEnabled) kv(ind, 'Highlight', String(a.fxIntensity ?? 0));
+    kv(ind, 'Sound',
+      (a.soundLand !== false ? 'On' : 'Off') + '  ' +
+      (a.soundAir  !== false ? 'On' : 'Off'));
+  };
 
-  // ── 개별 아이템 규칙 ──
-  if (itemRules.length > 0) {
-    cmt('  // ── 개별 아이템 규칙 (' + itemRules.length + '개) ──────────────────────────────────────────');
-    jl('  "itemRules": [');
-    itemRules.forEach((r, i) => {
-      const status = r.enabled !== false ? '✓ 활성' : '✗ 비활성';
-      const names  = (r.itemKeys||[]).map(k => BUILTIN_EQUIP_DB.find(x=>x.key===k)?.name || String(k));
-      const disp   = names.length === 0 ? '없음'
-        : names.slice(0,5).join(', ') + (names.length > 5 ? ' 외 '+(names.length-5)+'개' : '');
+  const now = new Date().toISOString().slice(0,10);
+  const ir = (p.itemRules||[]).slice().sort((a,b)=>a.priority-b.priority);
+  const cr = (p.condRules||[]).slice().sort((a,b)=>a.priority-b.priority);
+
+  // ── 헤더
+  cmt('# NUT Drop Filter  v1.0');
+  cmt('# Preset:          ' + p.name);
+  cmt('# DefaultBehavior: ' + (p.defaultBehavior === 'HideAll' ? 'HideAll' : 'Default'));
+  cmt('# Exported:        ' + now);
+
+  // ── 개별 아이템 규칙
+  if (ir.length) {
+    blank();
+    cmt('# ── 개별 아이템 규칙 (최우선 검사) ─────────────────────────────────────');
+    ir.forEach(r => {
       blank();
-      cmt('    // ─── [우선순위 ' + r.priority + '] "' + (r.name||'규칙 #'+r.priority) + '" — ' + status);
-      cmt('    // 선택 아이템 (' + names.length + '개): ' + disp);
-      cmt('    // 액션: ' + buildActionComment(r.action));
-      const rj = { priority:r.priority, is_enabled:r.enabled!==false, item_keys:r.itemKeys||[], action:r.action||mkAction() };
-      JSON.stringify(rj, null, 4).split('\n').forEach((ln, li, arr) => {
-        const trail = (li === arr.length-1 && i < itemRules.length-1) ? '<span class="sp-punc">,</span>' : '';
-        out.push(hlLine('    '+ln) + trail);
-      });
+      const keys = r.itemKeys || [];
+      const hint = keys.slice(0,3)
+        .map(k => BUILTIN_EQUIP_DB.find(x=>x.key===k)?.name || String(k))
+        .join(', ') + (keys.length > 3 ? ' 외 '+(keys.length-3)+'개' : '');
+      if (hint) cmt('# ' + hint);
+      out.push('<span style="color:#F1F5F9;font-weight:600">' + esc('ItemGroup ' + r.priority) +
+               (r.enabled !== false ? '' : ' <span class="sp-cmt"># 비활성</span>') + '</span>');
+      kv('    ', 'Enabled', r.enabled !== false ? 'True' : 'False');
+      if (keys.length) kv('    ', 'Items', keys.join(' '));
+      wa(r.action, '    ');
     });
-    blank(); jl('  ]' + (condRules.length > 0 ? ',' : ''));
-  } else {
-    cmt('  // ── 개별 아이템 규칙: 없음 ──────────────────────────────────────────────');
-    jl('  "itemRules": []' + (condRules.length > 0 ? ',' : ''));
   }
 
-  blank();
-
-  // ── 조건 규칙 ──
-  if (condRules.length > 0) {
-    cmt('  // ── 조건 규칙 (' + condRules.length + '개) ───────────────────────────────────────────────');
-    jl('  "condRules": [');
-    condRules.forEach((r, i) => {
-      const status = r.enabled !== false ? '✓ 활성' : '✗ 비활성';
+  // ── 조건 규칙
+  if (cr.length) {
+    blank();
+    cmt('# ── 조건 규칙 (Priority 오름차순 검사) ──────────────────────────────────');
+    cr.forEach(r => {
       blank();
-      cmt('    // ─── [우선순위 ' + r.priority + '] "' + (r.name||'규칙 #'+r.priority) + '" — ' + status + '  [연산자: ' + (r.operator||'AND') + ']');
-      cmt('    // 조건: ' + buildCondSummary(r.cond));
-      cmt('    // 액션: ' + buildActionComment(r.action));
-      const rj = { priority:r.priority, is_enabled:r.enabled!==false, operator:r.operator||'AND', conditions:r.cond||{}, action:r.action||mkAction() };
-      JSON.stringify(rj, null, 4).split('\n').forEach((ln, li, arr) => {
-        const trail = (li === arr.length-1 && i < condRules.length-1) ? '<span class="sp-punc">,</span>' : '';
-        out.push(hlLine('    '+ln) + trail);
-      });
+      const c = r.cond || {};
+      out.push('<span style="color:#F1F5F9;font-weight:600">' + esc('Rule ' + r.priority) +
+               (r.enabled !== false ? '' : ' <span class="sp-cmt"># 비활성</span>') + '</span>');
+      kv('    ', 'Enabled', r.enabled !== false ? 'True' : 'False');
+      if (c.ItemGrade?.enabled && c.ItemGrade.values?.length)
+        kv('    ', 'DropFilterCheckType_04', c.ItemGrade.values.join(' '));
+      if (c.ItemType?.enabled && c.ItemType.values?.length)
+        kv('    ', 'DropFilterCheckType_01', c.ItemType.values.join(' '));
+      if (c.ItemSubType?.enabled && c.ItemSubType.values?.length)
+        kv('    ', 'DropFilterCheckType_02', c.ItemSubType.values.join(' '));
+      if (c.EquipAttribute?.enabled && c.EquipAttribute.values?.length)
+        kv('    ', 'DropFilterCheckType_03', c.EquipAttribute.values.join(' '));
+      if (c.IsRelicItem?.enabled)
+        kv('    ', 'DropFilterCheckType_05', c.IsRelicItem.boolVal ? 'True' : 'False');
+      if (c.RelicSetGroup?.enabled && c.RelicSetGroup.values?.length)
+        kv('    ', 'DropFilterCheckType_05_Set', c.RelicSetGroup.values.join(' '));
+      if (c.ItemTier?.enabled) {
+        kv('    ', 'DropFilterCheckType_06_Min', String(c.ItemTier.min ?? 0));
+        kv('    ', 'DropFilterCheckType_06_Max', String(c.ItemTier.max ?? 10));
+      }
+      if (c.IsNamedItem?.enabled)
+        kv('    ', 'DropFilterCheckType_08', c.IsNamedItem.boolVal ? 'True' : 'False');
+      if (c.ItemQuality?.enabled && c.ItemQuality.values?.length)
+        kv('    ', 'DropFilterCheckType_11', c.ItemQuality.values.join(' '));
+      if (c.ItemOptionName?.enabled && c.ItemOptionName.values?.length)
+        kv('    ', 'DropFilterCheckType_14', c.ItemOptionName.values.join(' '));
+      wa(r.action, '    ');
     });
-    blank(); jl('  ]');
-  } else {
-    cmt('  // ── 조건 규칙: 없음 ──────────────────────────────────────────────────────');
-    jl('  "condRules": []');
   }
 
-  jl('}');
+  if (!ir.length && !cr.length) { blank(); cmt('# (규칙 없음)'); }
+
   return out.join('\n');
 }
 

@@ -971,6 +971,7 @@ function buildRC(r, readOnly, isFirst, isLast) {
   const tog = document.createElement('label'); tog.className='tog';
   const inp = document.createElement('input'); inp.type='checkbox'; inp.checked=r.enabled;
   inp.onchange = e => { e.stopPropagation(); if(!readOnly) toggleRuleEnabled(r.id, r._type); };
+  tog.onclick = e => e.stopPropagation();
   const sl = document.createElement('div'); sl.className='tog-sl';
   tog.appendChild(inp); tog.appendChild(sl); div.appendChild(tog);
 

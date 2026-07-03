@@ -5,7 +5,7 @@
 <title>드랍 필터 툴 — NUT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -45,7 +45,7 @@
 }
 /* ── Base ── */
 html{height:100%}
-body{font-family:'Pretendard','Inter',system-ui,sans-serif;font-size:14px;background:var(--bg);color:var(--text);height:100%;-webkit-font-smoothing:antialiased}
+body{font-family:'Noto Sans KR','Inter',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--text);height:100%;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
@@ -252,7 +252,7 @@ body{font-family:'Pretendard','Inter',system-ui,sans-serif;font-size:14px;backgr
 .ck input{accent-color:var(--primary);width:15px;height:15px}
 .opt-search{width:100%;height:36px;padding:0 var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit;outline:none;margin-bottom:var(--s2);transition:all .15s}
 .opt-search:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.opt-list{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.opt-list{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-sm)}
 .opt-row{display:flex;align-items:center;gap:var(--s1);padding:7px var(--s3);border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;font-weight:500;transition:background .1s}
 .opt-row:last-child{border-bottom:none}
 .opt-row:hover{background:var(--surface-hover)}
@@ -733,10 +733,10 @@ const BUILTIN_EQUIP_DB=[{"key":100000,"name":"일격의 대태도","sub":"무기
 
 // ══ 데이터 상수 ══
 const FILTER_CATS = [
-  { id:'itemtype', label:'아이템 유형',   keys:['ItemName','ItemType'], allKeys:['ItemName','ItemType','ItemSubType','EquipAttribute'] },
+  { id:'itemtype', label:'아이템 유형',   keys:['ItemType'], allKeys:['ItemType','ItemSubType','EquipAttribute'] },
   { id:'stat',     label:'주요 속성',     keys:['ItemGrade','ItemQuality','ItemTier'] },
   { id:'relic',    label:'유물',          keys:['IsRelicItem','RelicSetGroup'] },
-  { id:'named',    label:'네임드 아이템', keys:['IsNamedItem','NamedItemType'] },
+  { id:'named',    label:'네임드 아이템', keys:['IsNamedItem'] },
   { id:'option',   label:'아이템 옵션',   keys:['ItemOptionName'] },
 ];
 
@@ -751,7 +751,6 @@ const COND_META = {
   IsRelicItem:    { id:8,  label:'유물 아이템 여부',  type:'bool' },
   RelicSetGroup:  { id:9,  label:'유물 세트 그룹',    type:'chips' },
   IsNamedItem:    { id:10, label:'네임드 아이템 여부',type:'bool' },
-  NamedItemType:  { id:11, label:'특정 네임드 아이템',type:'text', note:'Enum 미확정' },
   ItemOptionName: { id:14, label:'아이템 옵션 명',    type:'optSearch' },
 };
 
@@ -826,7 +825,7 @@ function mkCond() {
     EquipAttribute: { enabled:false, values:[] },
     ItemGrade:      { enabled:false, values:[] },
     ItemQuality:    { enabled:false, values:[] },
-    ItemTier:       { enabled:false, min:0, max:99 },
+    ItemTier:       { enabled:false, min:0, max:10 },
     IsRelicItem:    { enabled:false, boolVal:true },
     RelicSetGroup:  { enabled:false, values:[] },
     IsNamedItem:    { enabled:false, boolVal:true },
@@ -1019,6 +1018,26 @@ function buildCondSummary(cond) {
   return parts.length ? parts.join(' · ') : '조건 없음';
 }
 
+function getAutoRuleName(rule) {
+  if (rule.type !== 'cond' || !rule.cond) return rule.name || '규칙 #' + rule.priority;
+  const c = rule.cond;
+  const parts = [];
+  if (c.ItemType?.enabled || c.ItemSubType?.enabled || c.EquipAttribute?.enabled) {
+    const typeLabel = (c.ItemType?.values||[]).map(k=>D_ITEM_TYPE.find(x=>x.key===k)?.label||k)[0];
+    const subLabel = (c.ItemSubType?.values||[]).map(k=>{for(const a of Object.values(D_SUB_TYPE)){const f=a.find(x=>x.key===k);if(f)return f.label;}return k;})[0];
+    const attrLabel = (c.EquipAttribute?.values||[]).map(k=>{for(const a of Object.values(D_EQUIP_ATTR)){const f=a.find(x=>x.key===k);if(f)return f.label;}return k;})[0];
+    parts.push(attrLabel || subLabel || typeLabel || '유형');
+  }
+  if (c.ItemGrade?.enabled && c.ItemGrade.values?.length) parts.push('등급');
+  if (c.ItemQuality?.enabled && c.ItemQuality.values?.length) parts.push('퀄리티');
+  if (c.ItemTier?.enabled) parts.push('티어');
+  if (c.IsRelicItem?.enabled) parts.push('유물');
+  if (c.RelicSetGroup?.enabled && c.RelicSetGroup.values?.length) parts.push('유물세트');
+  if (c.IsNamedItem?.enabled) parts.push('네임드');
+  if (c.ItemOptionName?.enabled && c.ItemOptionName.values?.length) parts.push('옵션');
+  return parts.length > 0 ? parts.join(', ') : rule.name || '규칙 #' + rule.priority;
+}
+
 function renderEdit() {
   const hdr = document.getElementById('editHdr');
   const editBody = document.getElementById('editBody');
@@ -1100,6 +1119,8 @@ function renderEdit() {
   if (!ro) {
     saveRuleRow.style.display = '';
     saveRuleFootBtn.onclick = () => {
+      const sr = selRule();
+      if (sr) sr.name = getAutoRuleName(sr);
       markDirty();
       S.selRuleId = null; S.selRuleType = null;
       renderRules(); renderEdit();
@@ -1581,7 +1602,7 @@ function buildCondInput(key, meta, c, rule, ro) {
       wrap.appendChild(inp); break;
     }
     case 'ItemType': {
-      wrap.appendChild(buildHierChips(rule, ro, upd)); break;
+      wrap.appendChild(buildHierDropdowns(rule, ro, upd)); break;
     }
     case 'ItemGrade':
       wrap.appendChild(buildChips(D_GRADE, c.values||[], key, rule, ro, upd)); break;
@@ -1589,9 +1610,9 @@ function buildCondInput(key, meta, c, rule, ro) {
       wrap.appendChild(buildChips(D_QUALITY, c.values||[], key, rule, ro, upd)); break;
     case 'ItemTier': {
       const row = el('div','tier-range');
-      const mn = document.createElement('input'); mn.type='number'; mn.min=0; mn.max=99; mn.value=c.min??0; mn.disabled=ro;
+      const mn = document.createElement('input'); mn.type='number'; mn.min=0; mn.max=10; mn.value=c.min??0; mn.disabled=ro;
       mn.oninput = () => { getCond().min = +mn.value; upd(); };
-      const mx = document.createElement('input'); mx.type='number'; mx.min=0; mx.max=99; mx.value=c.max??99; mx.disabled=ro;
+      const mx = document.createElement('input'); mx.type='number'; mx.min=0; mx.max=10; mx.value=c.max??10; mx.disabled=ro;
       mx.oninput = () => { getCond().max = +mx.value; upd(); };
       row.appendChild(mn); row.appendChild(el('span','','~')); row.appendChild(mx);
       wrap.appendChild(row); break;
@@ -1654,121 +1675,92 @@ function buildCondInput(key, meta, c, rule, ro) {
   return wrap;
 }
 
-// 아이템 유형 계층 선택: 대분류 chips → 선택 시 해당 중분류 expand → 선택 시 소분류 expand
-// ItemAttribute 테이블 기준 부모/자식 관계 적용
-function buildHierChips(rule, ro, upd) {
+// 아이템 유형 계층 선택: 대분류 드롭박스 → 중분류 드롭박스 → 소분류 드롭박스 (캐스케이딩)
+function buildHierDropdowns(rule, ro, upd) {
   const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px';
 
   const ensureCond = (key) => {
     if (!rule.cond[key]) rule.cond[key] = { enabled:false, values:[] };
     return rule.cond[key];
   };
 
-  // 대분류 chips
-  const l1 = el('span','il','아이템 대분류'); wrap.appendChild(l1);
-  const c1 = el('div','chips'); wrap.appendChild(c1);
-  const subSection = document.createElement('div'); wrap.appendChild(subSection);
+  const rebuild = () => {
+    wrap.innerHTML = '';
 
-  const refreshC1 = () => {
-    c1.querySelectorAll('.chip').forEach((ch,i) => {
-      ch.className='chip'+((rule.cond.ItemType?.values||[]).includes(D_ITEM_TYPE[i].key)?' on':'');
+    // 대분류
+    const l1 = el('span','il','대분류');
+    const sel1 = document.createElement('select');
+    sel1.className = 'cat-dropsel'; sel1.style.cssText = 'height:36px;font-size:13px';
+    const ph1 = document.createElement('option'); ph1.value = ''; ph1.textContent = '── 대분류 선택 ──';
+    sel1.appendChild(ph1);
+    const curType = (rule.cond.ItemType?.values||[])[0] || '';
+    D_ITEM_TYPE.forEach(it => {
+      const o = document.createElement('option'); o.value = it.key; o.textContent = it.label;
+      if (it.key === curType) o.selected = true;
+      sel1.appendChild(o);
     });
-  };
-
-  D_ITEM_TYPE.forEach(it => {
-    const on = (rule.cond.ItemType?.values||[]).includes(it.key);
-    const ch = el('span','chip'+(on?' on':''), it.label);
-    if(!ro) ch.onclick = () => {
+    sel1.disabled = ro;
+    if (!ro) sel1.onchange = () => {
       const cIT = ensureCond('ItemType');
-      const removing = cIT.values.includes(it.key);
-      toggleArr(cIT, 'values', it.key);
-      if(removing) {
-        // 자식 중분류 제거
-        const childSubKeys = (D_SUB_TYPE[it.key]||[]).map(s=>s.key);
-        const cST = ensureCond('ItemSubType');
-        childSubKeys.forEach(sk => {
-          const idx = cST.values.indexOf(sk);
-          if(idx>=0){ cST.values.splice(idx,1); }
-          const cEA = ensureCond('EquipAttribute');
-          (D_EQUIP_ATTR[sk]||[]).map(a=>a.key).forEach(ak=>{ const i=cEA.values.indexOf(ak);if(i>=0)cEA.values.splice(i,1); });
-          cEA.enabled = cEA.values.length > 0;
-        });
-        cST.enabled = cST.values.length > 0;
-      }
-      cIT.enabled = cIT.values.length > 0;
-      refreshC1(); upd(); rebuildSubs();
+      cIT.values = sel1.value ? [sel1.value] : []; cIT.enabled = !!sel1.value;
+      ensureCond('ItemSubType').values = []; ensureCond('ItemSubType').enabled = false;
+      ensureCond('EquipAttribute').values = []; ensureCond('EquipAttribute').enabled = false;
+      upd(); rebuild();
     };
-    c1.appendChild(ch);
-  });
+    wrap.appendChild(l1); wrap.appendChild(sel1);
 
-  const rebuildSubs = () => {
-    subSection.innerHTML = '';
-    const selTypes = rule.cond.ItemType?.values || [];
-    selTypes.forEach(typeKey => {
-      const subs = D_SUB_TYPE[typeKey]; if(!subs?.length) return;
-      const typeLabel = D_ITEM_TYPE.find(x=>x.key===typeKey)?.label||typeKey;
-      const grp = el('div','sub-indent');
-      grp.appendChild(el('span','sub-label','└ '+typeLabel+' — 중분류'));
-      const c2 = el('div','chips'); grp.appendChild(c2);
-      const attrSection = document.createElement('div'); grp.appendChild(attrSection);
+    if (!curType) return;
 
-      const refreshC2 = () => {
-        c2.querySelectorAll('.chip').forEach((ch,j) => {
-          ch.className='chip'+((rule.cond.ItemSubType?.values||[]).includes(subs[j].key)?' on':'');
-        });
-      };
-
-      subs.forEach(st => {
-        const on = (rule.cond.ItemSubType?.values||[]).includes(st.key);
-        const ch = el('span','chip'+(on?' on':''), st.label);
-        if(!ro) ch.onclick = () => {
-          const cST = ensureCond('ItemSubType');
-          const removing = cST.values.includes(st.key);
-          toggleArr(cST, 'values', st.key);
-          if(removing) {
-            const cEA = ensureCond('EquipAttribute');
-            (D_EQUIP_ATTR[st.key]||[]).map(a=>a.key).forEach(ak=>{ const i=cEA.values.indexOf(ak);if(i>=0)cEA.values.splice(i,1); });
-            cEA.enabled = cEA.values.length > 0;
-          }
-          cST.enabled = cST.values.length > 0;
-          refreshC2(); upd(); rebuildAttrs(attrSection, subs);
-        };
-        c2.appendChild(ch);
-      });
-
-      rebuildAttrs(attrSection, subs);
-      subSection.appendChild(grp);
+    // 중분류
+    const subs = D_SUB_TYPE[curType];
+    if (!subs?.length) return;
+    const l2 = el('span','il','중분류');
+    const sel2 = document.createElement('select');
+    sel2.className = 'cat-dropsel'; sel2.style.cssText = 'height:36px;font-size:13px';
+    const ph2 = document.createElement('option'); ph2.value = ''; ph2.textContent = '── 중분류 선택 ──';
+    sel2.appendChild(ph2);
+    const curSub = (rule.cond.ItemSubType?.values||[])[0] || '';
+    subs.forEach(st => {
+      const o = document.createElement('option'); o.value = st.key; o.textContent = st.label;
+      if (st.key === curSub) o.selected = true;
+      sel2.appendChild(o);
     });
+    sel2.disabled = ro;
+    if (!ro) sel2.onchange = () => {
+      const cST = ensureCond('ItemSubType');
+      cST.values = sel2.value ? [sel2.value] : []; cST.enabled = !!sel2.value;
+      ensureCond('EquipAttribute').values = []; ensureCond('EquipAttribute').enabled = false;
+      upd(); rebuild();
+    };
+    wrap.appendChild(l2); wrap.appendChild(sel2);
+
+    if (!curSub) return;
+
+    // 소분류
+    const attrs = D_EQUIP_ATTR[curSub];
+    if (!attrs?.length) return;
+    const l3 = el('span','il','소분류');
+    const sel3 = document.createElement('select');
+    sel3.className = 'cat-dropsel'; sel3.style.cssText = 'height:36px;font-size:13px';
+    const ph3 = document.createElement('option'); ph3.value = ''; ph3.textContent = '── 소분류 선택 ──';
+    sel3.appendChild(ph3);
+    const curAttr = (rule.cond.EquipAttribute?.values||[])[0] || '';
+    attrs.forEach(ea => {
+      const o = document.createElement('option'); o.value = ea.key; o.textContent = ea.label;
+      if (ea.key === curAttr) o.selected = true;
+      sel3.appendChild(o);
+    });
+    sel3.disabled = ro;
+    if (!ro) sel3.onchange = () => {
+      const cEA = ensureCond('EquipAttribute');
+      cEA.values = sel3.value ? [sel3.value] : []; cEA.enabled = !!sel3.value;
+      upd(); rebuild();
+    };
+    wrap.appendChild(l3); wrap.appendChild(sel3);
   };
 
-  const rebuildAttrs = (attrSection, parentSubs) => {
-    attrSection.innerHTML = '';
-    const selSubs = (rule.cond.ItemSubType?.values||[]).filter(sk => parentSubs.some(s=>s.key===sk));
-    selSubs.forEach(subKey => {
-      const attrs = D_EQUIP_ATTR[subKey]; if(!attrs?.length) return;
-      const subLabel = parentSubs.find(x=>x.key===subKey)?.label||subKey;
-      const attrGrp = el('div','sub-indent');
-      attrGrp.appendChild(el('span','sub-label','└ '+subLabel+' — 소분류'));
-      const c3 = el('div','chips'); attrGrp.appendChild(c3);
-      attrs.forEach(ea => {
-        const on = (rule.cond.EquipAttribute?.values||[]).includes(ea.key);
-        const ch = el('span','chip'+(on?' on':''), ea.label);
-        if(!ro) ch.onclick = () => {
-          const cEA = ensureCond('EquipAttribute');
-          toggleArr(cEA, 'values', ea.key);
-          cEA.enabled = cEA.values.length > 0;
-          upd();
-          c3.querySelectorAll('.chip').forEach((c4,j) => {
-            c4.className='chip'+(cEA.values.includes(attrs[j].key)?' on':'');
-          });
-        };
-        c3.appendChild(ch);
-      });
-      attrSection.appendChild(attrGrp);
-    });
-  };
-
-  rebuildSubs();
+  rebuild();
   return wrap;
 }
 
@@ -1846,8 +1838,8 @@ function renderAction(rule, ro) {
   const lblTxt = document.getElementById('actLabelEnTxt');
   lblTxt.textContent = act.labelEnabled!==false?'ON':'OFF';
   lblTxt.className = 'act-status ' + (act.labelEnabled!==false?'on':'off');
-  buildColorPicker('fontColorPicker', act.labelFontColor, k => { if(!ro){ getAct().labelFontColor=k; buildColorPicker('fontColorPicker',k,()=>{}); } });
-  buildColorPicker('bgColorPicker', act.labelBgColor, k => { if(!ro){ getAct().labelBgColor=k; buildColorPicker('bgColorPicker',k,()=>{}); } });
+  buildColorPicker('fontColorPicker', act.labelFontColor, k => { if(!ro){ updateAction('labelFontColor', k); } });
+  buildColorPicker('bgColorPicker', act.labelBgColor, k => { if(!ro){ updateAction('labelBgColor', k); } });
   document.getElementById('actFxEn').checked = !!act.fxEnabled;
   document.getElementById('actFxEn').disabled = ro;
   const fxTxt = document.getElementById('actFxEnTxt');
